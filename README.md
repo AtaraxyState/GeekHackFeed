@@ -197,14 +197,24 @@ git tag v1.0.0 && git push origin v1.0.0
 
 ### Release signing
 
-**Tagged builds need `KEYSTORE_BASE64` set, and the workflow fails without
-it.** That is deliberate. Android refuses to install an APK over one signed
-with a different key, so if CI generated a fresh key per run, no release could
-ever update another and the in-app updater would be useless. Better a loud
-failure than a set of releases that quietly cannot upgrade each other.
+**Nothing to configure: the signing key is committed at
+`android/public-release.keystore`, and its password is `android`.**
 
-Create a key once and keep it safe — losing it means every install has to be
-uninstalled and re-installed by hand:
+Android refuses to install an APK over one signed with a different key, so the
+key a release is signed with has to be *stable* — otherwise no release could
+update another and the in-app updater would be useless. Stability is the only
+property that matters here, and a key can be stable without being secret, so
+this repo publishes one rather than asking anyone to set up secrets. `build.py`
+defaults to the same key, which means an APK pushed over adb and an APK
+downloaded from Releases can replace each other.
+
+**The trade-off is real: this key is public, so anyone can build an APK that an
+install of this app accepts as an update.** There is no store listing and the
+updater only reads this repo's Releases, so it takes someone getting you to
+sideload their build — but if that matters to you, use a private key instead.
+
+To switch to one, create it and keep it safe (losing it means every install has
+to be uninstalled and reinstalled by hand):
 
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias geekhackfeed \
@@ -221,19 +231,29 @@ $jdk = "C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\PlaybackEngines
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks")) | Set-Clipboard
 ```
 
-Then add four repository secrets under Settings → Secrets and variables →
-Actions:
+Then add these under Settings → Secrets and variables → Actions. **Both of the
+first two are required to take effect** — a keystore cannot be opened without
+its password, so setting only one is ignored (with a warning) rather than
+silently producing releases signed with a different key:
 
 | Secret | Value |
 |---|---|
-| `KEYSTORE_BASE64` | contents of `release.jks.b64` |
+| `KEYSTORE_BASE64` | contents of `release.jks.b64` — the base64 *text*, not the file's bytes |
 | `KEYSTORE_PASSWORD` | the keystore password |
-| `KEY_PASSWORD` | the key password (often the same) |
-| `KEY_ALIAS` | `geekhackfeed` |
+| `KEY_PASSWORD` | optional; defaults to the keystore password |
+| `KEY_ALIAS` | optional; defaults to `geekhackfeed` |
 
-Keep `release.jks` out of the repo. The workflow prints the signing
-certificate's SHA-256 on every run, so you can confirm at a glance that
-releases still share a key.
+Keep `release.jks` out of the repo — `.gitignore` covers `*.jks` anywhere in
+the tree. Switching keys breaks updates for anyone already running a
+public-key build, so do it before you hand the app to anyone.
+
+The workflow logs which key it used and prints the certificate's SHA-256 on
+every run, so you can confirm at a glance that releases still share one. The
+committed key is:
+
+```
+SHA256: DB:F7:31:E6:F1:C2:A4:DF:B9:EF:56:44:9F:69:79:12:0F:96:79:3D:BC:D4:1A:E6:49:CD:B5:01:EC:DB:44:36
+```
 
 ## How it works
 

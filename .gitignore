@@ -6,13 +6,22 @@ covers-board*.json
 feed-board*.html
 feed-vendors.html
 
-# Signing keys, anywhere in the tree. The release keystore is prepared at the
-# repo root per the README, and committing it to a public repo would hand over
-# the identity every release is signed with.
+# Signing keys, anywhere in the tree. A private release key must never land in
+# a public repo: it is the identity every release is signed with.
 *.jks
 *.keystore
 *.jks.b64
 android/debug.keystore
+
+# The one deliberate exception. android/public-release.keystore is committed on
+# purpose and its password is "android", written down in the README -- it is a
+# published key, not a leaked one. Android only lets an APK install over one
+# signed with the same key, so the key has to be *stable*; this repo trades
+# secrecy for having nothing to configure. Anyone can therefore build an APK
+# this app accepts as an update, which is the accepted cost. Swap in a private
+# key by setting the KEYSTORE_BASE64 and KEYSTORE_PASSWORD secrets, which take
+# precedence -- see "Release signing" in the README.
+!android/public-release.keystore
 
 # Build output. The APK is published by the release workflow rather than
 # committed, so the repo never disagrees with the Releases page.

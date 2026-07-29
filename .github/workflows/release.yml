@@ -63,36 +63,38 @@ jobs:
           echo "build-tools: $(ls ${ANDROID_SDK_ROOT}/build-tools | tr '\n' ' ')"
           echo "platforms:   $(ls ${ANDROID_SDK_ROOT}/platforms | tr '\n' ' ')"
 
-      # A release must be signed with a stable key. If every run generated its
-      # own, each release would refuse to install over the last one and the
-      # in-app updater would be useless -- so fail loudly rather than publish
-      # something that cannot be updated.
-      - name: Check signing secrets
-        if: steps.version.outputs.release == 'true'
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "${KEYSTORE_BASE64}" ]; then
-            echo "::error::Tagged builds need a stable signing key, but the"
-            echo "::error::KEYSTORE_BASE64 secret is not set. Without it every"
-            echo "::error::release gets a different key and none of them can"
-            echo "::error::install over another. See README, 'Release signing'."
-            exit 1
-          fi
-
-      - name: Decode keystore
+      # A release must be signed with a *stable* key: Android refuses to install
+      # an APK over one signed with a different key, so a per-run key would mean
+      # no release could ever update another and the in-app updater would be
+      # useless. This repo gets that stability from a committed key whose
+      # password is public (android/public-release.keystore), so there is
+      # nothing to configure. Setting both KEYSTORE_BASE64 and KEYSTORE_PASSWORD
+      # overrides it with a private key -- both, because a keystore without its
+      # password cannot be opened, and half-configuring it should not silently
+      # produce differently-signed releases.
+      - name: Pick the signing key
         id: keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+          if [ -n "${KEYSTORE_BASE64:-}" ] && [ -n "${KS_PASS:-}" ]; then
             echo "${KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.jks"
             echo "path=${RUNNER_TEMP}/release.jks" >> "$GITHUB_OUTPUT"
-            echo "Using the repository signing key"
+            echo "private=true" >> "$GITHUB_OUTPUT"
+            echo "Signing with the private key from KEYSTORE_BASE64"
           else
-            echo "path=" >> "$GITHUB_OUTPUT"
-            echo "No signing secret; build.py will make a throwaway debug key"
+            if [ -n "${KEYSTORE_BASE64:-}" ]; then
+              echo "::warning::KEYSTORE_BASE64 is set but KEYSTORE_PASSWORD is"
+              echo "::warning::not, so it cannot be opened. Falling back to the"
+              echo "::warning::committed public key. Set both, or delete the"
+              echo "::warning::unused secret. See README, 'Release signing'."
+            fi
+            test -f android/public-release.keystore
+            echo "path=android/public-release.keystore" >> "$GITHUB_OUTPUT"
+            echo "private=false" >> "$GITHUB_OUTPUT"
+            echo "Signing with the committed public key (password: android)"
           fi
 
       - name: Build
@@ -101,12 +103,21 @@ jobs:
           KEY_PASS: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEYSTORE: ${{ steps.keystore.outputs.path }}
+          PRIVATE: ${{ steps.keystore.outputs.private }}
         run: |
           set -euo pipefail
           ARGS=(--version-name "${{ steps.version.outputs.name }}")
-          if [ -n "${KEYSTORE}" ]; then
-            ARGS+=(--keystore "${KEYSTORE}" --ks-pass "env:KS_PASS")
-            ARGS+=(--key-pass "env:KEY_PASS" --key-alias "${KEY_ALIAS:-geekhackfeed}")
+          ARGS+=(--keystore "${KEYSTORE}" --key-alias "${KEY_ALIAS:-geekhackfeed}")
+          if [ "${PRIVATE}" = "true" ]; then
+            ARGS+=(--ks-pass "env:KS_PASS")
+            # Only pass --key-pass when it is actually set: build.py already
+            # falls back to the store password, and an empty env: value would
+            # override that fallback with nothing.
+            if [ -n "${KEY_PASS:-}" ]; then
+              ARGS+=(--key-pass "env:KEY_PASS")
+            fi
+          else
+            ARGS+=(--ks-pass "pass:android")
           fi
           python android/build.py "${ARGS[@]}"
 

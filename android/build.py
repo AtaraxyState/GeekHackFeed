@@ -225,10 +225,19 @@ def build(args):
     run([zipalign, "-f", "4", base_apk, aligned])
 
     step("signing")
-    keystore = args.keystore or os.path.join(HERE, "debug.keystore")
+    # Default to the committed public key, so a build installed over USB and a
+    # build downloaded from Releases share a signature and can replace each
+    # other. A per-machine debug key would make the in-app updater fail with
+    # INSTALL_FAILED_UPDATE_INCOMPATIBLE on exactly the build you sideloaded.
+    public_keystore = os.path.join(HERE, "public-release.keystore")
+    default_keystore = (public_keystore if os.path.exists(public_keystore)
+                        else os.path.join(HERE, "debug.keystore"))
+    keystore = args.keystore or default_keystore
     ks_pass = args.ks_pass or "pass:android"
     key_pass = args.key_pass or ks_pass
-    alias = args.key_alias or "androiddebugkey"
+    default_alias = ("geekhackfeed" if keystore == public_keystore
+                     else "androiddebugkey")
+    alias = args.key_alias or default_alias
 
     if not os.path.exists(keystore):
         if args.keystore:
