@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
+<title>geekhack feed</title>
+<style>
+  :root {
+    --bg: #0e0f13;
+    --surface: #171922;
+    --surface-2: #1f2230;
+    --line: #2a2e3f;
+    --text: #e8eaf2;
+    --muted: #949bb3;
+    --accent: #7c8cff;
+    --accent-soft: rgba(124, 140, 255, 0.14);
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .25);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --surface-2: #eef0f6;
+      --line: #dfe2ec;
+      --text: #14161e;
+      --muted: #646b81;
+      --accent: #4351d8;
+      --accent-soft: rgba(67, 81, 216, 0.10);
+      --shadow: 0 1px 2px rgba(20, 22, 30, .06), 0 8px 24px rgba(20, 22, 30, .07);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Author rules like `.placeholder{display:grid}` outbid the UA stylesheet's
+     `[hidden]{display:none}`, which silently leaves "hidden" elements on
+     screen. Settle it once, here. */
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- header ---------- */
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .bar {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 14px 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .brand {
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -.01em;
+    margin-right: 4px;
+  }
+  .brand span { color: var(--muted); font-weight: 400; }
+
+  .grow { flex: 1 1 220px; }
+
+  input[type="search"], select {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font: inherit;
+    outline: none;
+  }
+  select { width: auto; cursor: pointer; }
+  input[type="search"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .chips {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 0 22px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .chip {
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .chip:hover { color: var(--text); }
+  .chip[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .chip .n { opacity: .6; margin-left: 5px; font-variant-numeric: tabular-nums; }
+
+  .divider { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+
+  /* ---------- grid ---------- */
+
+  main {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 22px;
+  }
+
+  .count {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+    gap: 18px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  }
+
+  .thumb {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: rgba(255, 255, 255, .82);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  }
+
+  .more {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .62);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+  }
+
+  .body { padding: 13px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--muted);
+    letter-spacing: .02em;
+  }
+  .pill.cat { background: var(--accent-soft); color: var(--accent); }
+
+  .title {
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -.005em;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card:hover .title { color: var(--accent); }
+
+  .excerpt {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .meta {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .meta .who {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty {
+    padding: 70px 20px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  #sentinel { height: 1px; }
+
+  footer {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 26px 22px 50px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .top {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 30;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    font-size: 17px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s;
+  }
+  .top.show { opacity: 1; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">geekhack <span id="boardLabel"></span></div>
+    <div class="grow">
+      <input type="search" id="search" placeholder="Search projects, makers, sets..." autocomplete="off" />
+    </div>
+    <select id="sort">
+      <option value="last">Recently active</option>
+      <option value="new">Newest thread</option>
+      <option value="replies">Most replies</option>
+      <option value="views">Most views</option>
+      <option value="az">Name A–Z</option>
+    </select>
+  </div>
+  <div class="chips" id="catChips"></div>
+  <div class="chips" id="stageChips" style="padding-top:0"></div>
+</header>
+
+<main>
+  <div class="count" id="count"></div>
+  <div class="grid" id="grid"></div>
+  <div id="sentinel"></div>
+  <div class="empty" id="empty" hidden>Nothing matches those filters.</div>
+</main>
+
+<footer id="footer"></footer>
+<button class="top" id="top" title="Back to top">↑</button>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const PALETTE = [
+  ["#6366f1", "#8b5cf6"], ["#0ea5e9", "#2563eb"], ["#10b981", "#059669"],
+  ["#f59e0b", "#ea580c"], ["#ec4899", "#be185d"], ["#14b8a6", "#0891b2"],
+  ["#a855f7", "#6d28d9"], ["#ef4444", "#b91c1c"]
+];
+
+const state = {
+  cats: new Set(),
+  stages: new Set(),
+  query: "",
+  sort: "last",
+  rendered: 0,
+  filtered: []
+};
+
+const PAGE = 60;
+const grid = document.getElementById("grid");
+
+/* ---------- helpers ---------- */
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function initials(name) {
+  const words = String(name).replace(/[^\w\s]/g, " ").split(/\s+/).filter(Boolean);
+  return (words.slice(0, 2).map(w => w[0]).join("") || "?").toUpperCase();
+}
+
+function gradient(id) {
+  const [a, b] = PALETTE[id % PALETTE.length];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function ago(iso) {
+  if (!iso) return "";
+  const then = new Date(iso);
+  if (isNaN(then)) return "";
+  const days = Math.floor((Date.now() - then) / 86400000);
+  if (days < 0) return "";
+  if (days === 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30) return days + "d ago";
+  if (days < 365) return Math.floor(days / 30) + "mo ago";
+  return Math.floor(days / 365) + "y ago";
+}
+
+function compact(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
+
+function tally(key) {
+  const counts = new Map();
+  for (const p of DATA.projects) counts.set(p[key], (counts.get(p[key]) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/* ---------- filter chips ---------- */
+
+function buildChips(containerId, key, selected) {
+  const box = document.getElementById(containerId);
+  const label = document.createElement("span");
+  label.className = "chip";
+  label.textContent = key === "category" ? "All types" : "All stages";
+  label.setAttribute("aria-pressed", "true");
+  label.onclick = () => { selected.clear(); syncChips(); apply(); };
+  box.appendChild(label);
+
+  const div = document.createElement("span");
+  div.className = "divider";
+  box.appendChild(div);
+
+  for (const [value, count] of tally(key)) {
+    const chip = document.createElement("button");
+    chip.className = "chip";
+    chip.dataset.value = value;
+    chip.setAttribute("aria-pressed", "false");
+    chip.innerHTML = esc(value) + `<span class="n">${count}</span>`;
+    chip.onclick = () => {
+      selected.has(value) ? selected.delete(value) : selected.add(value);
+      syncChips();
+      apply();
+    };
+    box.appendChild(chip);
+  }
+}
+
+function syncChips() {
+  for (const [id, selected] of [["catChips", state.cats], ["stageChips", state.stages]]) {
+    const box = document.getElementById(id);
+    box.firstChild.setAttribute("aria-pressed", selected.size === 0 ? "true" : "false");
+    box.querySelectorAll("button.chip").forEach(chip => {
+      chip.setAttribute("aria-pressed", selected.has(chip.dataset.value) ? "true" : "false");
+    });
+  }
+}
+
+/* ---------- rendering ---------- */
+
+function cardHTML(p) {
+  const src = p.local_image || (p.images && p.images[0]);
+  const extra = p.images && p.images.length > 1
+    ? `<span class="more">+${p.images.length - 1}</span>` : "";
+
+  const thumb = src
+    ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async"
+           onerror="this.hidden=true;this.parentNode.querySelector('.placeholder').hidden=false">
+       <div class="placeholder" hidden style="background:${gradient(p.id)}">${esc(initials(p.name))}</div>`
+    : `<div class="placeholder" style="background:${gradient(p.id)}">${esc(initials(p.name))}</div>`;
+
+  return `<a class="card" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">
+    <div class="thumb">${thumb}${extra}</div>
+    <div class="body">
+      <div class="pills">
+        <span class="pill cat">${esc(p.category)}</span>
+        <span class="pill">${esc(p.stage)}</span>
+      </div>
+      <div class="title">${esc(p.name)}</div>
+      ${p.excerpt ? `<div class="excerpt">${esc(p.excerpt)}</div>` : ""}
+      <div class="meta">
+        <span class="who">${esc(p.author)}</span>
+        <span>${compact(p.replies)} replies · ${ago(p.last_post)}</span>
+      </div>
+    </div>
+  </a>`;
+}
+
+function renderChunk() {
+  const slice = state.filtered.slice(state.rendered, state.rendered + PAGE);
+  if (!slice.length) return;
+  grid.insertAdjacentHTML("beforeend", slice.map(cardHTML).join(""));
+  state.rendered += slice.length;
+}
+
+function apply() {
+  const q = state.query.trim().toLowerCase();
+  state.filtered = DATA.projects.filter(p => {
+    if (state.cats.size && !state.cats.has(p.category)) return false;
+    if (state.stages.size && !state.stages.has(p.stage)) return false;
+    if (q && !(p.title + " " + p.author + " " + (p.excerpt || "")).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const by = {
+    last: (a, b) => String(b.last_post || "").localeCompare(String(a.last_post || "")),
+    new: (a, b) => String(b.created || "").localeCompare(String(a.created || "")),
+    replies: (a, b) => b.replies - a.replies,
+    views: (a, b) => b.views - a.views,
+    az: (a, b) => a.name.localeCompare(b.name)
+  }[state.sort];
+  state.filtered.sort(by);
+
+  grid.innerHTML = "";
+  state.rendered = 0;
+  renderChunk();
+
+  const n = state.filtered.length;
+  document.getElementById("count").textContent =
+    `${n} project${n === 1 ? "" : "s"}` + (n < DATA.projects.length ? ` of ${DATA.projects.length}` : "");
+  document.getElementById("empty").hidden = n > 0;
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
+
+/* ---------- wiring ---------- */
+
+document.getElementById("boardLabel").textContent = `· board ${DATA.board}`;
+document.getElementById("footer").textContent =
+  `${DATA.projects.length} threads scraped from geekhack board ${DATA.board} · generated ${DATA.generated.replace("T", " ").replace("+00:00", " UTC")} · images are hotlinked from their original hosts`;
+
+buildChips("catChips", "category", state.cats);
+buildChips("stageChips", "stage", state.stages);
+
+let debounce;
+document.getElementById("search").addEventListener("input", e => {
+  clearTimeout(debounce);
+  const value = e.target.value;
+  debounce = setTimeout(() => { state.query = value; apply(); }, 140);
+});
+
+document.getElementById("sort").addEventListener("change", e => {
+  state.sort = e.target.value;
+  apply();
+});
+
+new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) renderChunk();
+}, { rootMargin: "700px" }).observe(document.getElementById("sentinel"));
+
+const topBtn = document.getElementById("top");
+topBtn.onclick = () => window.scrollTo({ top: 0, behavior: "smooth" });
+window.addEventListener("scroll", () => topBtn.classList.toggle("show", window.scrollY > 900), { passive: true });
+
+apply();
+</script>
+</body>
+</html>

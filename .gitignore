@@ -1,0 +1,22 @@
+# Scraped content -- other people's forum posts and product renders.
+# All of it regenerates from a single `python scrape.py` run.
+images/
+cache-board*.json
+covers-board*.json
+feed-board*.html
+
+# Signing key. build.ps1 regenerates a local debug keystore on first run.
+android/debug.keystore
+
+# Build output
+android/build/
+__pycache__/
+*.py[cod]
+*.tmp
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+android/*.idsig

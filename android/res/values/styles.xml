@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the feed's own dark palette so the chrome does not clash. -->
+    <style name="AppTheme" parent="@android:style/Theme.Material">
+        <item name="android:colorPrimary">#171922</item>
+        <item name="android:colorPrimaryDark">#0b0c10</item>
+        <item name="android:colorAccent">#7c8cff</item>
+        <item name="android:windowBackground">#0e0f13</item>
+        <item name="android:actionBarStyle">@style/AppTheme.ActionBar</item>
+    </style>
+
+    <style name="AppTheme.ActionBar" parent="@android:style/Widget.Material.ActionBar">
+        <item name="android:background">#171922</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+</resources>
