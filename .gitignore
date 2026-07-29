@@ -6,7 +6,12 @@ covers-board*.json
 feed-board*.html
 feed-vendors.html
 
-# Signing key. build.ps1 regenerates a local debug keystore on first run.
+# Signing keys, anywhere in the tree. The release keystore is prepared at the
+# repo root per the README, and committing it to a public repo would hand over
+# the identity every release is signed with.
+*.jks
+*.keystore
+*.jks.b64
 android/debug.keystore
 
 # Build output. The APK is published by the release workflow rather than
