@@ -217,6 +217,9 @@
   }
   .pill.cat { background: var(--accent-soft); color: var(--accent); }
 
+  .price { color: var(--text); font-weight: 600; }
+  .oos { color: var(--muted); text-decoration: line-through; }
+
   .title {
     font-size: 14.5px;
     font-weight: 600;
@@ -310,6 +313,7 @@
   </div>
   <div class="chips" id="catChips"></div>
   <div class="chips" id="stageChips" style="padding-top:0"></div>
+  <div class="chips" id="sourceChips" style="padding-top:0"></div>
 </header>
 
 <main>
@@ -334,6 +338,7 @@ const PALETTE = [
 const state = {
   cats: new Set(),
   stages: new Set(),
+  sources: new Set(),
   query: "",
   sort: "last",
   rendered: 0,
@@ -379,9 +384,24 @@ function compact(n) {
   return String(n);
 }
 
+/* Forum threads are interesting for their activity, storefront listings for
+   their price and whether you can actually buy one. */
+function meta(p) {
+  if (p.price != null) {
+    const money = "$" + Number(p.price).toFixed(2).replace(/\.00$/, "");
+    return p.available
+      ? `<span class="price">${money}</span> · ${ago(p.last_post)}`
+      : `<span class="oos">${money}</span> · sold out`;
+  }
+  return `${compact(p.replies)} replies · ${ago(p.last_post)}`;
+}
+
 function tally(key) {
   const counts = new Map();
-  for (const p of DATA.projects) counts.set(p[key], (counts.get(p[key]) || 0) + 1);
+  for (const p of DATA.projects) {
+    const value = p[key] || "Unknown";
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
@@ -391,7 +411,7 @@ function buildChips(containerId, key, selected) {
   const box = document.getElementById(containerId);
   const label = document.createElement("span");
   label.className = "chip";
-  label.textContent = key === "category" ? "All types" : "All stages";
+  label.textContent = { category: "All types", stage: "All stages" }[key] || "All sources";
   label.setAttribute("aria-pressed", "true");
   label.onclick = () => { selected.clear(); syncChips(); apply(); };
   box.appendChild(label);
@@ -416,8 +436,10 @@ function buildChips(containerId, key, selected) {
 }
 
 function syncChips() {
-  for (const [id, selected] of [["catChips", state.cats], ["stageChips", state.stages]]) {
+  for (const [id, selected] of [["catChips", state.cats], ["stageChips", state.stages],
+                                ["sourceChips", state.sources]]) {
     const box = document.getElementById(id);
+    if (!box.firstChild) continue;
     box.firstChild.setAttribute("aria-pressed", selected.size === 0 ? "true" : "false");
     box.querySelectorAll("button.chip").forEach(chip => {
       chip.setAttribute("aria-pressed", selected.has(chip.dataset.value) ? "true" : "false");
@@ -449,7 +471,7 @@ function cardHTML(p) {
       ${p.excerpt ? `<div class="excerpt">${esc(p.excerpt)}</div>` : ""}
       <div class="meta">
         <span class="who">${esc(p.author)}</span>
-        <span>${compact(p.replies)} replies · ${ago(p.last_post)}</span>
+        <span>${meta(p)}</span>
       </div>
     </div>
   </a>`;
@@ -467,6 +489,7 @@ function apply() {
   state.filtered = DATA.projects.filter(p => {
     if (state.cats.size && !state.cats.has(p.category)) return false;
     if (state.stages.size && !state.stages.has(p.stage)) return false;
+    if (state.sources.size && !state.sources.has(p.source || "Unknown")) return false;
     if (q && !(p.title + " " + p.author + " " + (p.excerpt || "")).toLowerCase().includes(q)) return false;
     return true;
   });
@@ -493,12 +516,21 @@ function apply() {
 
 /* ---------- wiring ---------- */
 
-document.getElementById("boardLabel").textContent = `· board ${DATA.board}`;
+const sources = tally("source").map(([name]) => name);
+document.getElementById("boardLabel").textContent =
+  typeof DATA.board === "number" ? `· board ${DATA.board}` : `· ${DATA.board}`;
 document.getElementById("footer").textContent =
-  `${DATA.projects.length} threads scraped from geekhack board ${DATA.board} · generated ${DATA.generated.replace("T", " ").replace("+00:00", " UTC")} · images are hotlinked from their original hosts`;
+  `${DATA.projects.length} items from ${sources.join(", ") || "unknown sources"}`
+  + ` · generated ${DATA.generated.replace("T", " ").replace("+00:00", " UTC")}`;
 
 buildChips("catChips", "category", state.cats);
 buildChips("stageChips", "stage", state.stages);
+// Only worth a row of its own once more than one source is in the feed.
+if (tally("source").length > 1) {
+  buildChips("sourceChips", "source", state.sources);
+} else {
+  document.getElementById("sourceChips").hidden = true;
+}
 
 let debounce;
 document.getElementById("search").addEventListener("input", e => {

@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import scrape
+import vendors
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 IMAGE_DIR = os.path.join(HERE, "images")
@@ -64,6 +65,7 @@ class Feed:
         self.refresh_count = 0
         self.skipped_count = 0
         self._fingerprint = None
+        self._geekhack = []
         self._fetcher = scrape.Fetcher(delay=args.delay)
 
     # -- change detection ---------------------------------------------------
@@ -91,15 +93,32 @@ class Feed:
                 return "busy"
             self.refreshing = True
         try:
+            board_changed = True
             if not force:
                 fingerprint = self.board_fingerprint()
                 if fingerprint and fingerprint == self._fingerprint:
-                    self.last_refresh = now_iso()
-                    self.skipped_count += 1
-                    return "unchanged"
-                self._fingerprint = fingerprint
+                    board_changed = False
+                else:
+                    self._fingerprint = fingerprint
 
-            projects = scrape.scrape(self.args)
+            # Storefront stock moves without the forum changing, so vendors are
+            # polled every cycle regardless -- it is one request each.
+            if not board_changed and not self.args.vendors:
+                self.last_refresh = now_iso()
+                self.skipped_count += 1
+                return "unchanged"
+
+            if board_changed or not self._geekhack:
+                self._geekhack = scrape.scrape(self.args)
+            else:
+                print("[feed] board unchanged, refreshing vendors only")
+
+            projects = list(self._geekhack)
+            if self.args.vendors:
+                projects += vendors.collect(
+                    only=self.args.vendors, delay=self.args.delay
+                )
+
             payload = {
                 "board": self.args.board,
                 "generated": now_iso(),
@@ -255,7 +274,17 @@ def main():
     parser.add_argument("--host", default="0.0.0.0",
                         help="0.0.0.0 so the phone can reach it")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--vendors", nargs="?", const="all", default=None,
+        help="also pull vendor storefronts: bare flag for all, or a "
+             "comma-separated list of " + ",".join(vendors.VENDORS),
+    )
     args = parser.parse_args()
+
+    if args.vendors == "all":
+        args.vendors = list(vendors.VENDORS)
+    elif args.vendors:
+        args.vendors = [v.strip().lower() for v in args.vendors.split(",")]
 
     # scrape.scrape() expects the flags the CLI would have set.
     args.refresh = False

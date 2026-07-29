@@ -393,12 +393,14 @@ CATEGORY_RULES = [
             (r"\bkey\s?boards?\b", 9),
             (r"\bbeam\s?spring\b", 9),
             (r"\btkl\b", 8),
-            (r"\b(?:40|60|65|68|70|75|80|96|100)\s?%", 8),
+            (r"\b(?:40|60|61|65|68|70|75|80|87|96|98|100|104)\s?%", 8),
             # Board names bake the size in without a percent sign: Shy60, Navi60.
-            (r"[a-z](?:40|60|65|68|70|75|80|96|100)\b", 6),
+            (r"[a-z](?:40|60|61|65|68|70|75|80|87|96|98|100|104)\b", 6),
             (r"\b(?:40|60|65|75|80)s\b", 5),
             (r"\bnum\s?pad\b", 7),
             (r"\bmacro\s?pad\b", 7),
+            # ZoomPad, Keypad, NumPad -- Deskmats outscores this for deskpads.
+            (r"\b\w+pad\b", 5),
             (r"\balice\b", 6),
             (r"\bhhkb\b", 6),
             (r"\bkeeb\b", 6),
@@ -834,6 +836,8 @@ def scrape(args):
         project["name"] = clean_title(project["title"])
         project["url"] = topic_url(project["id"])
         project["local_image"] = None
+        # Lets a merged feed tell forum threads from vendor listings.
+        project["source"] = "geekhack"
         # Keep a short blurb for the card and the search index; the full 2.5k
         # snippet stays in the cache so the page does not balloon.
         project["excerpt"] = text[:220].strip()

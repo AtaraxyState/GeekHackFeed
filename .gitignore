@@ -4,6 +4,7 @@ images/
 cache-board*.json
 covers-board*.json
 feed-board*.html
+feed-vendors.html
 
 # Signing key. build.ps1 regenerates a local debug keystore on first run.
 android/debug.keystore

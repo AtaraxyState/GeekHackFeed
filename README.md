@@ -4,12 +4,13 @@ Turns a geekhack board into a single scrollable feed: every project as a card
 with its product shot, name and a one-line blurb, filterable by type (keycaps /
 keyboards / switches / artisans / cables / deskmats / parts).
 
-Three pieces:
+Four pieces:
 
 | | |
 |---|---|
-| `scrape.py` | Scrapes a board and writes a self-contained HTML page |
-| `serve.py` | Keeps that up to date on a timer and serves it over HTTP |
+| `scrape.py` | Scrapes a geekhack board and writes a self-contained HTML page |
+| `vendors.py` | Pulls vendor storefronts into the same format |
+| `serve.py` | Keeps it all up to date on a timer and serves it over HTTP |
 | `android/` | Phone app that points at the server, and updates itself |
 
 Python 3.8+. Needs [Pillow](https://pypi.org/project/pillow/) for cover
@@ -38,10 +39,64 @@ threads each, and writes `feed-board70.html`. Open it in any browser.
 The whole board is roughly 60 pages. `--pages 60` takes about an hour at the
 default delay; results are cached, so the next run only fetches what is new.
 
+## Vendor storefronts
+
+```bash
+python vendors.py --open
+python vendors.py --only omnitype,meletrix
+```
+
+Every supported vendor runs Shopify, which serves its whole catalogue as JSON
+at `/products.json`. That makes this far cheaper than the forum scraper: **one
+request per vendor** (all five catalogues fit in a single page of 250), no HTML
+parsing, and no cover pipeline at all — Shopify's CDN resizes on demand, so a
+`_600x` suffix turns an 819 KB product shot into a 32 KB thumbnail. Nothing is
+downloaded or thumbnailed locally.
+
+| Vendor | Products | `product_type` quality |
+|---|---|---|
+| [Meletrix](https://meletrix.com) | 186 | partial |
+| [Omnitype](https://omnitype.com) | 176 | good — Keycaps / Deskpad / Switches |
+| [Qwertykeys](https://qwertykeys.com) | 99 | internal codes |
+| [Mode Designs](https://modedesigns.com) | 84 | product lines, not categories |
+| [Matrix Lab](https://www.matrixlab.store) | 33 | blank |
+
+None of their robots.txt files disallow it, and none declare a crawl-delay.
+
+Categories come from the vendor's own `product_type` where it maps cleanly, and
+fall back to the shared classifier otherwise. Two catalogue-specific quirks are
+handled in `vendors.py`:
+
+- **A storefront names the board in every one of its spare parts** — "Neo60 Cu
+  Weight", "ZOOM65 V3 Add On - External Weight". The forum scraper's size rule
+  (which exists so "Shy60" reads as a keyboard) then files the entire parts bin
+  under Keyboards, so on a catalogue a part noun outranks it.
+- **`configurator` tags are not a noise signal.** Mode tags standalone products
+  — Lotus Keycaps, 65% Plate, SixtyFive Weight — as `configurator-component`
+  because they double as build options. Filtering on that tag dropped 43 of
+  their 85 products. Configurator-only entries are caught by their titles
+  instead (`[CFG]`, `Add On`).
+
+Gift cards, deposits, shipping fees and add-on entries are dropped by default;
+`--include-all` keeps them.
+
+### Singakbd
+
+Not supported, and not for a technical reason: **the whole storefront is behind
+Shopify's password gate.** `/`, `/collections/all` and `/password` all return
+the same 55,864-byte page with `canonical: /password` and zero product links;
+`/products.json`, `/collections/all/products.json` and `/cart.js` all 401; there
+is no sitemap. No open reseller carries their stock either (checked iLumkb,
+Deskhero, KTechs, PantheonKeys, Divinikey). There is no public data to read, so
+the only route in would be defeating the shop's password — add it to `VENDORS`
+in `vendors.py` if that ever changes.
+
 ## Server
 
 ```bash
 python serve.py --interval 5
+python serve.py --interval 5 --vendors            # geekhack + all vendors
+python serve.py --vendors omnitype,qwertykeys     # or just some
 ```
 
 Binds port 8765 on every interface, then scrapes. It starts listening
@@ -60,6 +115,10 @@ Every `--interval` minutes it checks the board's **RSS feed** (about 5 KB) and
 only runs a real scrape when the hash of that changed. A 5 minute cadence
 therefore costs geekhack ~5 KB a poll rather than three full listing pages, and
 a warm refresh takes about 5 seconds.
+
+Vendors are polled every cycle regardless, because storefront stock moves
+without the forum changing and it is one request each. When the board is
+unchanged but vendors are enabled, only the vendors are refetched.
 
 ## Android app
 
