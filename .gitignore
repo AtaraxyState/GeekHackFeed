@@ -8,8 +8,10 @@ feed-board*.html
 # Signing key. build.ps1 regenerates a local debug keystore on first run.
 android/debug.keystore
 
-# Build output
+# Build output. The APK is published by the release workflow rather than
+# committed, so the repo never disagrees with the Releases page.
 android/build/
+android/*.apk
 __pycache__/
 *.py[cod]
 *.tmp

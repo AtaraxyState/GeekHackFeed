@@ -10,7 +10,7 @@ Three pieces:
 |---|---|
 | `scrape.py` | Scrapes a board and writes a self-contained HTML page |
 | `serve.py` | Keeps that up to date on a timer and serves it over HTTP |
-| `android/` | Phone app that points at the server |
+| `android/` | Phone app that points at the server, and updates itself |
 
 Python 3.8+. Needs [Pillow](https://pypi.org/project/pillow/) for cover
 thumbnails (`pip install pillow`); everything else is standard library.
@@ -63,35 +63,101 @@ a warm refresh takes about 5 seconds.
 
 ## Android app
 
-`android/geekhack-feed.apk` is a thin client: it renders whatever the server is
-currently serving, so improving the feed only means restarting the server, not
-rebuilding the app.
+A thin client: it renders whatever the server is currently serving, so
+improving the feed only means restarting the server, not rebuilding the app.
 
-1. Run `serve.py` on this machine and note the address it prints.
-2. Copy the APK to the phone and install it (needs "install from unknown
-   sources" for whatever app you copied it with).
+1. Run `serve.py` and note the address it prints.
+2. Install the APK from the [Releases page](../../releases).
 3. First launch asks for the server address — `192.168.x.x:8765`.
 
 Menu: **Refresh** reloads the page, **Rescan geekhack now** calls
 `/api/refresh` so you do not have to wait out the timer, **Change server**
-re-prompts for the address. Back navigates the WebView; thread links open in
-the real browser.
+re-prompts for the address, **Check for updates** asks GitHub. Back navigates
+the WebView; thread links open in the real browser.
 
-Rebuild it with:
+### Updating itself
+
+The app reads `/releases/latest` from the GitHub API, compares the tag against
+its own `versionCode`, and offers to download and install a newer one. It
+checks on launch at most once every 6 hours, and the menu item forces a check.
+"Skip this one" suppresses a specific tag until a later one appears.
+
+Two things make that work:
+
+- **Version codes come from the tag.** `v1.2.3` becomes `10203` via the same
+  formula in `build.py` and `UpdateManager.versionCodeOf`, so the comparison is
+  arithmetic rather than string guesswork. `AndroidManifest.xml` deliberately
+  declares no `versionCode` — aapt2 only injects the command-line value when
+  the manifest is silent, and a manifest-pinned `1` would make every release
+  look newer than itself, forever.
+- **`UpdateProvider`** hands the downloaded file to the system installer.
+  Android refuses a `file://` URI across apps and the usual answer is AndroidX
+  `FileProvider`; this is the same idea in the ~50 lines actually needed,
+  serving exactly one read-only file, which keeps the app AndroidX-free.
+
+Android also requires the user to allow this app to install packages
+(Settings → install unknown apps). The app detects that and offers to open the
+right screen.
+
+### Building
+
+CI builds every push and publishes on tags, so you normally do not need to.
+Locally:
 
 ```powershell
 cd android; .\build.ps1
 ```
 
-That drives `aapt2`, `javac`, `d8`, `zipalign` and `apksigner` directly — no
-Gradle, no Android Studio, nothing downloaded. It finds the SDK and JDK that
-ship with Unity, or takes `-Sdk` / `-Jdk`. Add `-Install` to push it over adb.
-The app is plain Java with no AndroidX, which is what keeps the build to a
-handful of SDK tool invocations.
+That is a wrapper around `build.py`, which is what CI runs too — one
+implementation, so a change cannot work locally and break the release job. It
+drives `aapt2`, `javac`, `d8`, `zipalign` and `apksigner` directly: no Gradle,
+no Android Studio, nothing downloaded. On Windows it finds the SDK and JDK that
+ship with Unity; elsewhere it uses `ANDROID_SDK_ROOT` and `JAVA_HOME`. Add
+`-Install` to push over adb.
 
-Note the APK is signed with a local debug key (`android/debug.keystore`,
-generated on first build). That is fine for sideloading onto your own phone; it
-is not something you could publish.
+## Releasing
+
+`.github/workflows/release.yml` builds on every push and pull request. Pushing
+a `v*` tag also publishes a GitHub Release with the APK attached and notes
+generated from the commits since the previous tag.
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+### Release signing
+
+**Tagged builds need `KEYSTORE_BASE64` set, and the workflow fails without
+it.** That is deliberate. Android refuses to install an APK over one signed
+with a different key, so if CI generated a fresh key per run, no release could
+ever update another and the in-app updater would be useless. Better a loud
+failure than a set of releases that quietly cannot upgrade each other.
+
+Create a key once and keep it safe — losing it means every install has to be
+uninstalled and re-installed by hand:
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias geekhackfeed \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+```bash
+base64 -w0 release.jks > release.jks.b64
+```
+
+Then add four repository secrets under Settings → Secrets and variables →
+Actions:
+
+| Secret | Value |
+|---|---|
+| `KEYSTORE_BASE64` | contents of `release.jks.b64` |
+| `KEYSTORE_PASSWORD` | the keystore password |
+| `KEY_PASSWORD` | the key password (often the same) |
+| `KEY_ALIAS` | `geekhackfeed` |
+
+Keep `release.jks` out of the repo. The workflow prints the signing
+certificate's SHA-256 on every run, so you can confirm at a glance that
+releases still share a key.
 
 ## How it works
 

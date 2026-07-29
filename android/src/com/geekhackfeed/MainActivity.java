@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private static final int MENU_REFRESH = 1;
     private static final int MENU_RESCAN = 2;
     private static final int MENU_SERVER = 3;
+    private static final int MENU_UPDATE = 4;
 
     private WebView web;
     private String server;
@@ -111,6 +112,9 @@ public class MainActivity extends Activity {
         } else {
             load();
         }
+
+        // Throttled inside UpdateManager, so this is quiet on most launches.
+        checkForUpdates(false);
     }
 
     // ---------------------------------------------------------------- server
@@ -198,6 +202,7 @@ public class MainActivity extends Activity {
         web.loadUrl(server + "/");
     }
 
+    @SuppressWarnings("deprecation") // getActiveNetworkInfo covers back to API 24
     private boolean isOnline() {
         try {
             ConnectivityManager cm =
@@ -281,6 +286,7 @@ public class MainActivity extends Activity {
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         menu.add(0, MENU_RESCAN, 1, "Rescan geekhack now");
         menu.add(0, MENU_SERVER, 2, "Change server");
+        menu.add(0, MENU_UPDATE, 3, "Check for updates");
         return true;
     }
 
@@ -296,9 +302,42 @@ public class MainActivity extends Activity {
             case MENU_SERVER:
                 promptForServer(false);
                 return true;
+            case MENU_UPDATE:
+                checkForUpdates(true);
+                return true;
             default:
                 return super.onOptionsItemSelected(item);
         }
+    }
+
+    // -------------------------------------------------------------- updates
+
+    /** @param manual true from the menu: report "up to date" and ignore throttling */
+    private void checkForUpdates(final boolean manual) {
+        if (manual) {
+            toast("Checking for updates...");
+        }
+        UpdateManager.check(this, manual, new UpdateManager.Callback() {
+            @Override
+            public void onResult(UpdateManager.Release release, String error) {
+                if (isFinishing()) {
+                    return;
+                }
+                if (error != null) {
+                    if (manual) {
+                        toast("Update check failed: " + error);
+                    }
+                    return;
+                }
+                if (release == null) {
+                    if (manual) {
+                        toast("Up to date (" + UpdateManager.versionName(MainActivity.this) + ")");
+                    }
+                    return;
+                }
+                UpdateManager.promptAndInstall(MainActivity.this, release);
+            }
+        });
     }
 
     // --------------------------------------------------------------- plumbing

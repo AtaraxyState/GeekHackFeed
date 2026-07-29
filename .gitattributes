@@ -1,0 +1,16 @@
+# Normalise text in the repo regardless of who commits from where.
+* text=auto eol=lf
+
+# These are read by the Linux CI runner; CRLF in a `run: |` block breaks bash.
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf
+*.py    text eol=lf
+
+# PowerShell stays CRLF for local Windows editing.
+*.ps1   text eol=crlf
+
+*.png   binary
+*.apk   binary
+*.jks   binary
+*.keystore binary

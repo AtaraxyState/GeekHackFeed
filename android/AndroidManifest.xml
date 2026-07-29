@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- versionCode and versionName are deliberately absent. aapt2 injects them
+     from the command line only when the manifest does not already declare
+     them, and build.py derives both from the release tag. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.geekhackfeed"
-    android:versionCode="1"
-    android:versionName="1.0">
+    package="com.geekhackfeed">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Lets the app hand a downloaded release to the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -25,5 +28,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Serves only the downloaded update, read-only, to the installer. -->
+        <provider
+            android:name=".UpdateProvider"
+            android:authorities="com.geekhackfeed.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
