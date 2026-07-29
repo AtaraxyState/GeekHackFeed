@@ -42,6 +42,7 @@ VENDORS = {
     "qwertykeys": ("Qwertykeys", "https://qwertykeys.com"),
     "modedesigns": ("Mode Designs", "https://modedesigns.com"),
     "matrixlab": ("Matrix Lab", "https://www.matrixlab.store"),
+    "kbdfans": ("KBDfans", "https://kbdfans.com"),
 }
 
 
@@ -90,7 +91,7 @@ PRODUCT_TYPE_MAP = {
     "artisan": "Artisans",
     "artisans": "Artisans",
     "keyboard": "Keyboards",
-    "keyboards": "Keyboard",
+    "keyboards": "Keyboards",
     "pre-build keyboard": "Keyboards",
     "prebuilt keyboard": "Keyboards",
     "keyboard parts": "Parts & Accessories",
@@ -100,7 +101,32 @@ PRODUCT_TYPE_MAP = {
     "accessory": "Parts & Accessories",
     "components": "Parts & Accessories",
     "component": "Parts & Accessories",
+    "usb cable": "Cables",
 }
+
+# KBDfans is the one storefront that does not keep a tidy noun in the type
+# field: it spells the layout into it ("60% assembled keyboard", "80% DIY KIT",
+# "65% PCB") and names switches by their feel. Patterns cover that whole
+# vocabulary in three rules where the dict above would need thirty entries.
+# Ordered: the keyboard rule runs first so "60% assembled keyboard" is not read
+# as a spare case.
+PRODUCT_TYPE_PATTERNS = [
+    (re.compile(r"\bassembled\s+keyboard\b|\bdiy\s?kit\b", re.I), "Keyboards"),
+    (
+        re.compile(
+            r"\bcases?\b|\bplates?\b|\bpcbs?\b|\bfoam\b|\bsockets?\b|\bfilms?\b|"
+            r"\bscrews?\b|\bpads?\b|\btools?\b|\bpullers?\b|\bopener\b|\btester\b|"
+            r"\bstabili[sz]ers?\b|\bwrist\s?rest\b|\bassembly\b",
+            re.I,
+        ),
+        "Parts & Accessories",
+    ),
+    # No "switch" anywhere in these -- the feel is the whole label.
+    (
+        re.compile(r"\blinear\b|\btactile\b|\bclicky\b|\bmagnetic\b|\bpre-?lubed\b", re.I),
+        "Switches",
+    ),
+]
 
 # A storefront names the board in every one of its spare parts -- "Neo60 Cu
 # Weight", "ZOOM65 V3 Add On - External Weight" -- and the forum scraper's
@@ -132,6 +158,9 @@ NOISE_RE = re.compile(
 # because they double as build options. Dropping those loses half a catalogue
 # of real products. Configurator-only entries are caught by their titles.
 NOISE_TAG_RE = re.compile(r"bogos-gift|^hidden$|do-not-", re.I)
+# KBDfans files add-ons, hidden entries and its tariff line under a product
+# type instead of saying so in the title, so NOISE_RE never sees them.
+NOISE_TYPE_RE = re.compile(r"\badd[\s-]?ons?\b|^hidden$|placeholder", re.I)
 
 
 def categorise(product):
@@ -140,6 +169,9 @@ def categorise(product):
     mapped = PRODUCT_TYPE_MAP.get(declared)
     if mapped:
         return mapped
+    for pattern, category in PRODUCT_TYPE_PATTERNS:
+        if pattern.search(declared):
+            return category
 
     title = product.get("title") or ""
     if PART_NOUN_RE.search(title) and not PART_OVERRIDE_RE.search(title):
@@ -152,7 +184,9 @@ def categorise(product):
 
 
 IN_STOCK_TAG_RE = re.compile(r"\bin[\s_-]?stock\b|readytoship|ready\s+to\s+ship", re.I)
-GB_TAG_RE = re.compile(r"group\s?buy|\bgb\b|pre-?order", re.I)
+# "In Production" is a closed group buy being made, which is nearer a Group Buy
+# than anything else the feed can say about it.
+GB_TAG_RE = re.compile(r"group\s?buy|\bgb\b|pre-?order|in\s?production", re.I)
 IC_TAG_RE = re.compile(r"interest\s?check|\bic\b|upcoming", re.I)
 
 
@@ -162,21 +196,32 @@ def stage_of(product):
     available = any(v.get("available") for v in variants)
     tags = " ".join(product.get("tags") or [])
     title = product.get("title") or ""
-    haystack = f"{tags} {title}"
+    # KBDfans keeps the lifecycle in the type field -- "Interest Check",
+    # "Pre-order", "In Production" -- where the others use tags.
+    declared = (product.get("product_type") or "").strip()
 
-    if IC_TAG_RE.search(haystack):
+    if IC_TAG_RE.search(declared):
         return "Interest Check"
-    if GB_TAG_RE.search(haystack):
+    if GB_TAG_RE.search(declared):
         return "Group Buy"
-    if available:
-        return "In Stock"
-    if IN_STOCK_TAG_RE.search(haystack):
-        return "Sold Out"
-    return "Sold Out"
+    # The type field is what the vendor says *today*; tags only accumulate.
+    # KBDfans leaves "Group Buy" on sets whose buy closed long ago and which
+    # now sit on the shelf as extras, so a type of "In Stock" has to override
+    # them -- but it does not by itself mean anything is left to buy, so the
+    # answer still comes from the variants.
+    if not IN_STOCK_TAG_RE.search(declared):
+        haystack = f"{tags} {title}"
+        if IC_TAG_RE.search(haystack):
+            return "Interest Check"
+        if GB_TAG_RE.search(haystack):
+            return "Group Buy"
+    return "In Stock" if available else "Sold Out"
 
 
 def is_noise(product):
     if NOISE_RE.search(product.get("title") or ""):
+        return True
+    if NOISE_TYPE_RE.search((product.get("product_type") or "").strip()):
         return True
     return any(NOISE_TAG_RE.search(t) for t in (product.get("tags") or []))
 

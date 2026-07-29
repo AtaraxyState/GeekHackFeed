@@ -48,13 +48,14 @@ python vendors.py --only omnitype,meletrix
 
 Every supported vendor runs Shopify, which serves its whole catalogue as JSON
 at `/products.json`. That makes this far cheaper than the forum scraper: **one
-request per vendor** (all five catalogues fit in a single page of 250), no HTML
-parsing, and no cover pipeline at all — Shopify's CDN resizes on demand, so a
-`_600x` suffix turns an 819 KB product shot into a 32 KB thumbnail. Nothing is
-downloaded or thumbnailed locally.
+request per vendor** (five of the six catalogues fit in a single page of 250;
+KBDfans needs a second), no HTML parsing, and no cover pipeline at all —
+Shopify's CDN resizes on demand, so a `_600x` suffix turns an 819 KB product
+shot into a 32 KB thumbnail. Nothing is downloaded or thumbnailed locally.
 
 | Vendor | Products | `product_type` quality |
 |---|---|---|
+| [KBDfans](https://kbdfans.com) | 380 | mixed — layout, switch feel and lifecycle all share the field |
 | [Meletrix](https://meletrix.com) | 186 | partial |
 | [Omnitype](https://omnitype.com) | 176 | good — Keycaps / Deskpad / Switches |
 | [Qwertykeys](https://qwertykeys.com) | 99 | internal codes |
@@ -64,7 +65,7 @@ downloaded or thumbnailed locally.
 None of their robots.txt files disallow it, and none declare a crawl-delay.
 
 Categories come from the vendor's own `product_type` where it maps cleanly, and
-fall back to the shared classifier otherwise. Two catalogue-specific quirks are
+fall back to the shared classifier otherwise. Three catalogue-specific quirks are
 handled in `vendors.py`:
 
 - **A storefront names the board in every one of its spare parts** — "Neo60 Cu
@@ -76,9 +77,19 @@ handled in `vendors.py`:
   because they double as build options. Filtering on that tag dropped 43 of
   their 85 products. Configurator-only entries are caught by their titles
   instead (`[CFG]`, `Add On`).
+- **KBDfans puts three different things in `product_type`** — the layout
+  (`60% assembled keyboard`, `80% DIY KIT`, `65% PCB`), the switch feel with no
+  noun attached (`Linear`, `Magnetic`), and the lifecycle (`Interest Check`,
+  `In Production`). Patterns cover the `%`-parameterised families in three rules
+  instead of thirty dict entries. Its tags also only ever accumulate: 37 products
+  carry both `Group Buy` and `In Stock`, because a set whose buy closed years ago
+  keeps the tag while it sits on the shelf as extras. So where `product_type`
+  names a lifecycle it outranks the tags — though `In Stock` there still doesn't
+  mean anything is left to buy, so that answer comes from the variants.
 
 Gift cards, deposits, shipping fees and add-on entries are dropped by default;
-`--include-all` keeps them.
+`--include-all` keeps them. KBDfans marks its add-ons, hidden configurators and
+EU-tariff line in `product_type` rather than the title, so those are read there.
 
 ### Singakbd
 
