@@ -139,10 +139,16 @@ uninstalled and re-installed by hand:
 ```bash
 keytool -genkeypair -v -keystore release.jks -alias geekhackfeed \
   -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.jks > release.jks.b64
 ```
 
-```bash
-base64 -w0 release.jks > release.jks.b64
+On Windows, `keytool` comes with the JDK that Unity ships, and this puts the
+base64 straight on the clipboard ready to paste:
+
+```powershell
+$jdk = "C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\PlaybackEngines\AndroidPlayer\OpenJDK\bin"
+& "$jdk\keytool.exe" -genkeypair -v -keystore release.jks -alias geekhackfeed -keyalg RSA -keysize 2048 -validity 10000
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks")) | Set-Clipboard
 ```
 
 Then add four repository secrets under Settings → Secrets and variables →
