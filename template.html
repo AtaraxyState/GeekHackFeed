@@ -129,6 +129,35 @@
 
   .divider { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 
+  /* Collapse control for the filter chips. Desktop has the room to show them
+     all, so it only exists on narrow screens (see the media query). */
+  .filterToggle {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .filterToggle[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .filterToggle .fcount {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
   /* ---------- grid ---------- */
 
   main {
@@ -293,6 +322,55 @@
     transition: opacity .18s;
   }
   .top.show { opacity: 1; pointer-events: auto; }
+
+  /* ---------- phones ----------
+     The header is sticky, and on a phone the three chip rows made it about
+     1700px tall: the whole viewport was filters and you had to scroll past
+     them to reach the first project. So the chips collapse behind a Filters
+     button (badged with how many are active), and everything tightens up. */
+
+  @media (max-width: 760px) {
+    .bar { padding: 10px 14px; gap: 8px; }
+    .brand { font-size: 16px; flex: 1 1 auto; margin-right: 0; }
+    .grow { flex: 1 1 100%; order: 3; }
+    select { flex: 0 1 auto; order: 4; min-width: 0; }
+    .filterToggle { display: inline-flex; order: 5; }
+
+    .filters { display: none; }
+    /* Capped so an expanded filter panel can never fill the screen again. */
+    .filters.open {
+      display: block;
+      max-height: 52vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .chips { padding: 0 14px 10px; gap: 6px; }
+    .chip { padding: 5px 11px; font-size: 12.5px; }
+
+    main { padding: 14px; }
+    .count { margin-bottom: 10px; }
+    /* Two columns: a 4/3 cover per screen wastes a phone, and the images are
+       the point of the feed. */
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .body { padding: 10px 11px 12px; gap: 6px; }
+    .title { font-size: 13.5px; -webkit-line-clamp: 2; }
+    .excerpt { display: none; }
+    .meta { font-size: 11.5px; }
+    .pill { font-size: 10px; padding: 2px 6px; }
+
+    footer { padding: 20px 14px 44px; }
+    .top { right: 14px; bottom: 14px; }
+  }
+
+  /* Very narrow (or large system font): one column reads better than two
+     squeezed ones. */
+  @media (max-width: 380px) {
+    .grid { grid-template-columns: 1fr; }
+    .excerpt { display: -webkit-box; }
+  }
 </style>
 </head>
 <body>
@@ -310,10 +388,14 @@
       <option value="views">Most views</option>
       <option value="az">Name A–Z</option>
     </select>
+    <button class="filterToggle" id="filterToggle" aria-expanded="false"
+            aria-controls="filters">Filters<span class="fcount" id="fcount" hidden></span></button>
   </div>
-  <div class="chips" id="catChips"></div>
-  <div class="chips" id="stageChips" style="padding-top:0"></div>
-  <div class="chips" id="sourceChips" style="padding-top:0"></div>
+  <div class="filters" id="filters">
+    <div class="chips" id="catChips"></div>
+    <div class="chips" id="stageChips" style="padding-top:0"></div>
+    <div class="chips" id="sourceChips" style="padding-top:0"></div>
+  </div>
 </header>
 
 <main>
@@ -445,6 +527,14 @@ function syncChips() {
       chip.setAttribute("aria-pressed", selected.has(chip.dataset.value) ? "true" : "false");
     });
   }
+  // With the panel collapsed on a phone, the badge is the only clue that a
+  // filter is narrowing the feed.
+  const active = state.cats.size + state.stages.size + state.sources.size;
+  const badge = document.getElementById("fcount");
+  if (badge) {
+    badge.textContent = String(active);
+    badge.hidden = active === 0;
+  }
 }
 
 /* ---------- rendering ---------- */
@@ -542,6 +632,14 @@ document.getElementById("search").addEventListener("input", e => {
 document.getElementById("sort").addEventListener("change", e => {
   state.sort = e.target.value;
   apply();
+});
+
+/* Filters panel (phones only — on desktop the button is display:none and the
+   chips are always shown, so this listener simply never fires). */
+const filterToggle = document.getElementById("filterToggle");
+filterToggle.addEventListener("click", () => {
+  const open = document.getElementById("filters").classList.toggle("open");
+  filterToggle.setAttribute("aria-expanded", open ? "true" : "false");
 });
 
 new IntersectionObserver(entries => {
