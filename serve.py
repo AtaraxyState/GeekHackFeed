@@ -7,6 +7,7 @@ cached thumbnails, so the phone only ever talks to this machine.
     python serve.py                        # board 70, refresh every 5 min
     python serve.py --interval 15          # gentler
     python serve.py --port 8765 --pages 6  # more of the board
+    python serve.py --tunnel               # also reachable off the home Wi-Fi
 
 Endpoints:
     GET /                 the same scrollable feed, for a phone browser
@@ -28,6 +29,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import scrape
+import tunnel as tunnel_mod
 import vendors
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +66,7 @@ class Feed:
         self.refreshing = False
         self.refresh_count = 0
         self.skipped_count = 0
+        self.tunnel = None  # set in main() when --tunnel is used
         self._fingerprint = None
         self._geekhack = []
         self._fetcher = scrape.Fetcher(delay=args.delay)
@@ -150,7 +153,7 @@ class Feed:
     def status(self):
         with self.lock:
             count = len(self.payload["projects"])
-        return {
+        status = {
             "board": self.args.board,
             "projects": count,
             "last_refresh": self.last_refresh,
@@ -161,6 +164,11 @@ class Feed:
             "interval_minutes": self.args.interval,
             "last_error": self.last_error,
         }
+        # Quick-tunnel URLs change on every restart, so publish the current one:
+        # the phone can read it here instead of the user hunting through logs.
+        if self.tunnel is not None:
+            status["public_url"] = self.tunnel.url
+        return status
 
 
 def now_iso():
@@ -279,6 +287,11 @@ def main():
         help="also pull vendor storefronts: bare flag for all, or a "
              "comma-separated list of " + ",".join(vendors.VENDORS),
     )
+    parser.add_argument(
+        "--tunnel", action="store_true",
+        help="also publish a Cloudflare quick tunnel (public HTTPS URL, no "
+             "account needed) so the phone works off the home Wi-Fi",
+    )
     args = parser.parse_args()
 
     if args.vendors == "all":
@@ -306,6 +319,22 @@ def main():
     for url in local_addresses(args.port):
         print(f"  {url}")
     print(f"  http://localhost:{args.port}")
+
+    # The tunnel comes up alongside the LAN addresses, not instead of them: on
+    # the home Wi-Fi the direct address stays faster and keeps working if
+    # Cloudflare is having a bad day.
+    if args.tunnel:
+        try:
+            feed.tunnel = tunnel_mod.start_background(args.port)
+            if feed.tunnel.url:
+                print(f"  {feed.tunnel.url}   <- public, works anywhere")
+            else:
+                print("  (tunnel starting; the URL will appear in "
+                      "tunnel-url.txt and /api/status)")
+        except tunnel_mod.TunnelError as exc:
+            # A failed tunnel must not cost you the LAN server.
+            scrape.warn(f"tunnel unavailable: {exc}")
+
     print("\npoint the Android app at one of the addresses above (Ctrl+C to stop)\n")
 
     try:
@@ -316,6 +345,8 @@ def main():
         print("\nstopped")
     finally:
         server.shutdown()
+        if feed.tunnel is not None:
+            feed.tunnel.stop()
 
 
 if __name__ == "__main__":

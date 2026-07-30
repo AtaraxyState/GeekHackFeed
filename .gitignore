@@ -28,6 +28,16 @@ android/debug.keystore
 android/build/
 android/*.apk
 __pycache__/
+
+# Cloudflare tunnel: the downloaded cloudflared binary and the per-run URL/log.
+# The quick-tunnel URL is different on every start, so it is runtime state.
+.tools/
+tunnel-url.txt
+tunnel.log
+
+# Server output when it is launched detached rather than in a terminal.
+serve.log
+serve.err.log
 *.py[cod]
 *.tmp
 

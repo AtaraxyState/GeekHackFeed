@@ -122,6 +122,38 @@ is warming up.
 | `/api/refresh` | force a rescrape now (what the app's menu calls) |
 | `/images/<id>.jpg` | cached cover thumbnails |
 
+### Reaching it away from home
+
+```bash
+python serve.py --interval 5 --vendors --tunnel
+```
+
+`--tunnel` also opens a **Cloudflare quick tunnel**: no account, no router
+port-forwarding, no inbound firewall hole — `cloudflared` dials *out* and
+Cloudflare hands back a public HTTPS address, printed alongside the LAN ones.
+
+```
+  http://192.168.1.75:8765
+  https://screens-productivity-porter-occupation.trycloudflare.com   <- public, works anywhere
+```
+
+The binary is downloaded once into `.tools/` (an existing `cloudflared` on
+`PATH` wins). The LAN addresses keep working: on the home Wi-Fi they are
+faster, and they survive Cloudflare having a bad day.
+
+Two things to know about quick tunnels:
+
+- **The URL changes on every restart.** It is written to `tunnel-url.txt` and
+  published as `public_url` in `/api/status`, so you can grab the current one
+  without reading logs. If `cloudflared` dies, the server restarts it and
+  prints the new URL — the old one is dead at that point, so the app has to be
+  re-pointed.
+- **The URL is public.** Anyone who has it can read your feed and trigger
+  `/api/refresh`. It is scraped public forum content, so the stake is low, but
+  the address is effectively the only thing protecting it — do not post it.
+
+A failed tunnel never costs you the local server: it warns and carries on.
+
 Every `--interval` minutes it checks the board's **RSS feed** (about 5 KB) and
 only runs a real scrape when the hash of that changed. A 5 minute cadence
 therefore costs geekhack ~5 KB a poll rather than three full listing pages, and
@@ -138,7 +170,8 @@ improving the feed only means restarting the server, not rebuilding the app.
 
 1. Run `serve.py` and note the address it prints.
 2. Install the APK from the [Releases page](../../releases).
-3. First launch asks for the server address — `192.168.x.x:8765`.
+3. First launch asks for the server address — `192.168.x.x:8765`, or paste the
+   `https://….trycloudflare.com` URL from `--tunnel` to use it off the Wi-Fi.
 
 Menu: **Refresh** reloads the page, **Rescan geekhack now** calls
 `/api/refresh` so you do not have to wait out the timer, **Change server**
